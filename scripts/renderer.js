@@ -18,7 +18,7 @@ class Renderer {
         this.canvas.height = canvas.height;
         this.ctx = this.canvas.getContext('2d');
         this.scene = this.processScene(scene);
-        this.enable_animation = false;  // <-- disabled for easier debugging; enable for animation
+        this.enable_animation = true;  // <-- disabled for easier debugging; enable for animation
         this.start_time = null;
         this.prev_time = null;
     }
@@ -26,6 +26,46 @@ class Renderer {
     //
     updateTransforms(time, delta_time) {
         // TODO: update any transformations needed for animation
+        for (let i = 0; i < this.scene.models.length; i++){
+            let model = this.scene.models[i];
+
+            // Skip models without animations
+            if (model.animation === undefined) {
+                continue;
+            }
+            
+            // For generic models
+            if (model.center === undefined) {
+                let sumX = 0;
+                let sumY = 0;
+                let sumZ = 0;
+                for (let j = 0; j < model.vertices.length; j++){
+                    sumX = sumX + model.vertices[j].x;
+                    sumY = sumY + model.vertices[j].y;
+                    sumZ = sumZ + model.vertices[j].z;
+                }
+                let count = model.vertices.length;
+                model.center = CG.Vector4(sumX / count, sumY / count, sumZ / count, 1);
+            }
+
+            let seconds = time / 1000;
+            let angle = 2 * Math.PI * model.animation.rps * seconds;
+            let toOrigin = new Matrix(4,4);
+            CG.mat4x4Translate(toOrigin, -model.center.x, -model.center.y, -model.center.z);
+
+            let rotate = new Matrix(4,4);
+            if (model.animation.axis === "x") {
+                CG.mat4x4RotateX(rotate, angle);
+            } else if (model.animation.axis === "y") {
+                CG.mat4x4RotateY(rotate, angle);
+            } else {
+                CG.mat4x4RotateZ(rotate, angle);
+            }
+
+            let move = new Matrix(4,4);
+            CG.mat4x4Translate(move, model.center.x, model.center.y, model.center.z);
+            model.matrix = Matrix.multiply([move, rotate, toOrigin]);
+        }
     }
 
     //
@@ -63,14 +103,46 @@ class Renderer {
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
         // TODO: implement drawing here!
+        let view = this.scene.view;
+        let nPer = CG.mat4x4Perspective(view.prp, view.srp, view.vup, view.clip);
+        let mPer = CG.mat4x4MPer();
+        let viewport = CG.mat4x4Viewport(this.canvas.width, this.canvas.height);
+        let near = view.clip[4];
+        let far = view.clip[5];
+        let z_min = -near / far;
         // For each model
-        //   * For each vertex
-        //     * transform endpoints to canonical view volume
-        //   * For each line segment in each edge
-        //     * clip in 3D
-        //     * project to 2D
-        //     * translate/scale to viewport (i.e. window)
-        //     * draw line
+        for (let i = 0; i < this.scene.models.length; i++){
+            let model = this.scene.models[i];
+        // For each vertex, transform endpoints to canonical view volume    
+            let newVertices = [];
+            for (let j = 0; j < model.vertices.length; j++){
+                let v = Matrix.multiply([nPer, model.matrix, model.vertices[j]]);
+                newVertices.push(v);
+            }
+            //  For each line segment in each edge, clip in 3D
+            for (let k = 0; k < model.edges.length; k++){
+                let edge = model.edges[k];
+
+                for (let l = 0; l < edge.length - 1; l++){
+                let line = {pt0: newVertices[edge[l]], pt1: newVertices[edge[l+1]]};
+                let clipped = this.clipLinePerspective(line, z_min);
+                if(clipped == null){
+                    continue;
+                }
+                // Project to 2D
+                let p0 = Matrix.multiply([mPer, clipped.pt0]);
+                let p1 = Matrix.multiply([mPer, clipped.pt1]);
+                p0 = CG.Vector4(p0.x / p0.w, p0.y / p0.w, p0.z / p0.w, 1);
+                p1 = CG.Vector4(p1.x / p1.w, p1.y / p1.w, p1.z / p1.w, 1);
+                // Translate/scale to viewport (i.e. window)
+                p0 = Matrix.multiply([viewport, p0]);
+                p1 = Matrix.multiply([viewport, p1]);
+                // Draw line
+                this.drawLine(p0.x, p0.y, p1.x, p1.y);
+                    
+                }
+            }
+        }
     }
 
     // Get outcode for a vertex
@@ -105,14 +177,63 @@ class Renderer {
     // z_min:        float (near clipping plane in canonical view volume)
     clipLinePerspective(line, z_min) {
         let result = null;
-        let p0 = Vector3(line.pt0.x, line.pt0.y, line.pt0.z); 
-        let p1 = Vector3(line.pt1.x, line.pt1.y, line.pt1.z);
+        let p0 = CG.Vector4(line.pt0.x, line.pt0.y, line.pt0.z, line.pt0.w); 
+        let p1 = CG.Vector4(line.pt1.x, line.pt1.y, line.pt1.z, line.pt1.w);
         let out0 = this.outcodePerspective(p0, z_min);
         let out1 = this.outcodePerspective(p1, z_min);
         
         // TODO: implement clipping here!
-        
-        return result;
+        while (true){
+        // Trival Accept:
+            if((out0 | out1) === 0) {
+                result = {pt0: p0, pt1: p1};
+                return result;
+            }
+
+        // Trival Reject:
+            if((out0 & out1) !== 0) {
+                result = null;
+                return result;
+            }
+        // Otherwise, investigate further    
+            let outsidePt;
+            if(out0 != 0) {
+                outsidePt = out0;
+            } else {
+                outsidePt = out1;
+            }
+
+            let t = this.findT(p0, p1, outsidePt, z_min);
+            let newPt = CG.Vector4(p0.x + t * (p1.x - p0.x), p0.y + t * (p1.y - p0.y), p0.z + t * (p1.z - p0.z), 1);
+            if(outsidePt == out0){
+                p0 = newPt;
+                out0 = this.outcodePerspective(p0, z_min);
+            } else {
+                p1 = newPt;
+                out1 = this.outcodePerspective(p1, z_min);
+            }
+        }
+    }
+
+    // Find T shows where the line from p0 to p1 crosses one side of the view. 
+    findT(p0, p1, outcode, z_min) {
+        let dx = p1.x - p0.x;
+        let dy = p1.y - p0.y;
+        let dz = p1.z - p0.z;
+
+        if(outcode & LEFT) {
+            return (p0.z - p0.x) / (dx - dz);
+        } else if(outcode & RIGHT) {
+            return (p0.x + p0.z) / (-dx - dz);
+        } else if(outcode & BOTTOM) {
+            return (p0.z - p0.y) / (dy - dz);
+        } else if(outcode & TOP) {
+            return (p0.y + p0.z) / (-dy - dz);
+        } else if(outcode & FAR) {
+            return (-1 - p0.z) / dz;
+        } else {
+            return (z_min - p0.z) / dz; //This is NEAR.
+        }
     }
 
     //
