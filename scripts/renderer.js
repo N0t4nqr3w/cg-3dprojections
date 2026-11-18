@@ -67,34 +67,160 @@ class Renderer {
             model.matrix = Matrix.multiply([move, rotate, toOrigin]);
         }
     }
+    
+    // Helper function for camera position
+    getCameraPosition() {
+        let view = this.scene.view;
+        let n = view.prp.subtract(view.srp)
+        n.normalize();
+        let u = view.vup.cross(n)
+        u.normalize();
+        let v = n.cross(u);
+        return {u, v, n};
+    }
 
     //
     rotateLeft() {
+        let view = this.scene.view;
+        let {u, v, n} = this.getCameraPosition();
+        let angle = 0.05;
 
+        let d = view.srp.subtract(view.prp);
+        let x = d.dot(u);
+        let y = d.dot(v);
+        let z = d.dot(n);
+
+        let cos = Math.cos(angle);
+        let sin = Math.sin(angle);
+        let newX = cos * x + sin * z;
+        let newZ = -sin * x + cos * z;
+
+        view.srp = CG.Vector3 (
+            view.prp.x + newX * u.x + y * v.x + newZ * n.x,
+            view.prp.y + newX * u.y + y * v.y + newZ * n.y,
+            view.prp.z + newX * u.z + y * v.z + newZ * n.z
+        );
+
+        if (!this.enable_animation) {
+            this.draw();
+        }
     }
     
     //
     rotateRight() {
+        let view = this.scene.view;
+        let {u, v, n} = this.getCameraPosition();
+        let angle = -0.05;
+
+        let d = view.srp.subtract(view.prp);
+        let x = d.dot(u);
+        let y = d.dot(v);
+        let z = d.dot(n);
+
+        let cos = Math.cos(angle);
+        let sin = Math.sin(angle);
+        let newX = cos * x + sin * z;
+        let newZ = -sin * x + cos * z;
+
+        view.srp = CG.Vector3 (
+            view.prp.x + newX * u.x + y * v.x + newZ * n.x,
+            view.prp.y + newX * u.y + y * v.y + newZ * n.y,
+            view.prp.z + newX * u.z + y * v.z + newZ * n.z
+        );
+
+        if (!this.enable_animation) {
+            this.draw();
+        }
 
     }
     
     //
     moveLeft() {
+        let view = this.scene.view;
+        let {u} = this.getCameraPosition();
+        let moveStep = 1.0;
 
+        view.prp = CG.Vector3(
+            view.prp.x - moveStep * u.x,
+            view.prp.y - moveStep * u.y,
+            view.prp.z - moveStep * u.z
+        )
+        view.srp = CG.Vector3(
+            view.srp.x - moveStep * u.x,
+            view.srp.y - moveStep * u.y,
+            view.srp.z - moveStep * u.z
+        )
+
+        if (!this.enable_animation) {
+            this.draw();
+        }
     }
     
     //
     moveRight() {
+        let view = this.scene.view;
+        let {u} = this.getCameraPosition();
+        let moveStep = 1.0;
 
+        view.prp = CG.Vector3(
+            view.prp.x + moveStep * u.x,
+            view.prp.y + moveStep * u.y,
+            view.prp.z + moveStep * u.z
+        )
+        view.srp = CG.Vector3(
+            view.srp.x + moveStep * u.x,
+            view.srp.y + moveStep * u.y,
+            view.srp.z + moveStep * u.z
+        )
+
+        if (!this.enable_animation) {
+            this.draw();
+        }
     }
     
     //
     moveBackward() {
+        let view = this.scene.view;
+        let {n} = this.getCameraPosition();
+        let moveStep = 1.0;
+
+        view.prp = CG.Vector3(
+            view.prp.x + moveStep * n.x,
+            view.prp.y + moveStep * n.y,
+            view.prp.z + moveStep * n.z
+        )
+        view.srp = CG.Vector3(
+            view.srp.x + moveStep * n.x,
+            view.srp.y + moveStep * n.y,
+            view.srp.z + moveStep * n.z
+        )
+
+        if (!this.enable_animation) {
+            this.draw();
+        }
 
     }
     
     //
     moveForward() {
+        let view = this.scene.view;
+        let {n} = this.getCameraPosition();
+        let moveStep = 1.0;
+
+        view.prp = CG.Vector3(
+            view.prp.x - moveStep * n.x,
+            view.prp.y - moveStep * n.y,
+            view.prp.z - moveStep * n.z
+        )
+        view.srp = CG.Vector3(
+            view.srp.x - moveStep * n.x,
+            view.srp.y - moveStep * n.y,
+            view.srp.z - moveStep * n.z
+        )
+
+        if (!this.enable_animation) {
+            this.draw();
+        }
 
     }
 
