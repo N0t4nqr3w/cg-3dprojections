@@ -410,33 +410,165 @@ class Renderer {
         };
 
         for (let i = 0; i < scene.models.length; i++) {
-            let model = { type: scene.models[i].type };
+            let src = scene.models[i];
+            let model = { type: src.type };
+
+            if (src.hasOwnProperty('animation')) {
+                model.animation = JSON.parse(JSON.stringify(src.animation));
+            }
+            model.matrix = new Matrix(4, 4);
+
             if (model.type === 'generic') {
                 model.vertices = [];
-                model.edges = JSON.parse(JSON.stringify(scene.models[i].edges));
-                for (let j = 0; j < scene.models[i].vertices.length; j++) {
-                    model.vertices.push(CG.Vector4(scene.models[i].vertices[j][0],
-                                                   scene.models[i].vertices[j][1],
-                                                   scene.models[i].vertices[j][2],
+                model.edges = JSON.parse(JSON.stringify(src.edges));
+                for (let j = 0; j < src.vertices.length; j++) {
+                    model.vertices.push(CG.Vector4(src.vertices[j][0],
+                                                   src.vertices[j][1],
+                                                   src.vertices[j][2],
                                                    1));
-                    if (scene.models[i].hasOwnProperty('animation')) {
-                        model.animation = JSON.parse(JSON.stringify(scene.models[i].animation));
-                    }
                 }
+            }
+            else if (model.type === 'cube') {
+                let c = src.center;
+                let hw = src.width/2;
+                let hh = src.height/2;
+                let hd = src.depth/2;
+
+                model.center = CG.Vector4(c[0], c[1], c[2], 1);
+                model.vertices = [
+                    CG.Vector4(c[0]-hw, c[1]-hh, c[2]-hd, 1),
+                    CG.Vector4(c[0]+hw, c[1]-hh, c[2]-hd, 1),
+                    CG.Vector4(c[0]+hw, c[1]+hh, c[2]-hd, 1),
+                    CG.Vector4(c[0]-hw, c[1]+hh, c[2]-hd, 1),
+                    CG.Vector4(c[0]-hw, c[1]-hh, c[2]+hd, 1),
+                    CG.Vector4(c[0]+hw, c[1]-hh, c[2]+hd, 1),
+                    CG.Vector4(c[0]+hw, c[1]+hh, c[2]+hd, 1),
+                    CG.Vector4(c[0]-hw, c[1]+hh, c[2]+hd, 1)
+                ];
+                model.edges = [
+                    [0, 1], [1, 2], [2, 3], [3, 0],
+                    [4, 5], [5, 6], [6, 7], [7, 4],
+                    [0, 4], [1, 5], [2, 6], [3, 7]
+                ];
+            }
+            else if (model.type === 'cone') {
+                let c = src.center;
+                let r = src.radius;
+                let h = src.height;
+                let sides = src.sides;
+
+                model.center = CG.Vector4(c[0], c[1], c[2], 1);
+                model.vertices = [];
+                model.edges = [];
+
+                // Add vertices for the base of the cone
+                let hh = h / 2;
+                for (let j = 0; j < sides; j++) {
+                    let theta = (2 * Math.PI * j) / sides;
+                    model.vertices.push(CG.Vector4(
+                        c[0] + r * Math.cos(theta), 
+                        c[1] - hh, 
+                        c[2] + r * Math.sin(theta), 
+                        1));
+                    model.edges.push([j, sides]);
+                }
+                model.vertices.push(CG.Vector4(c[0], c[1] + hh, c[2], 1));
+
+                // Add edges for the base of the cone
+                let baseEdge = [];
+                for (let k = 0; k < sides; k++) {
+                    baseEdge.push(k);
+                }
+                baseEdge.push(0); // Close the loop
+                model.edges.push(baseEdge);
+            }
+            else if (model.type === 'cylinder') {
+                let c = src.center;
+                let r = src.radius;
+                let h = src.height;
+                let sides = src.sides;
+
+                model.center = CG.Vector4(c[0], c[1], c[2], 1);
+                model.vertices = [];
+                model.edges = [];
+
+                // Add vertices for the top and bottom circles of the cylinder
+                let hh = h / 2;
+                for (let j = 0; j < sides; j++) {
+                    let theta = (2 * Math.PI * j) / sides;
+                    model.vertices.push(CG.Vector4(
+                        c[0] + r * Math.cos(theta),
+                        c[1] - hh,
+                        c[2] + r * Math.sin(theta),
+                        1
+                    ));
+                }
+                for (let j = 0; j < sides; j++) {
+                    let theta = (2 * Math.PI * j) / sides;
+                    model.vertices.push(CG.Vector4(
+                        c[0] + r * Math.cos(theta),
+                        c[1] + hh,
+                        c[2] + r * Math.sin(theta),
+                        1
+                    ));
+                    model.edges.push([j, j + sides]);
+                }
+                // Add edges for the top and bottom circles
+                let topEdge = [];
+                let bottomEdge = [];
+                for (let j = 0; j < sides; j++) {
+                    bottomEdge.push(j);
+                    topEdge.push(j + sides);
+                }
+                bottomEdge.push(0); // Close the loop for bottom
+                topEdge.push(sides); // Close the loop for top
+                model.edges.push(bottomEdge);
+                model.edges.push(topEdge);
+                
             }
             else {
-                model.center = CG.Vector4(scene.models[i].center[0],
-                                         scene.models[i].center[1],
-                                         scene.models[i].center[2],
-                                         1);
-                for (let key in scene.models[i]) {
-                    if (scene.models[i].hasOwnProperty(key) && key !== 'type' && key != 'center') {
-                        model[key] = JSON.parse(JSON.stringify(scene.models[i][key]));
+                let c = src.center;
+                let r = src.radius;
+                let slices = src.slices;
+                let stacks = src.stacks;
+
+                model.center = CG.Vector4(c[0], c[1], c[2], 1);
+                model.vertices = [];
+                model.edges = [];
+
+                // Add vertices for the sphere
+                for (let j = 0; j <= stacks; j++) {
+                    let phi = Math.PI * (j / stacks) - Math.PI / 2; // from -pi/2 to pi/2
+                    let cosPhi = Math.cos(phi);
+                    let sinPhi = Math.sin(phi);
+
+                    // Add vertices for the current stack
+                    for (let k = 0; k <= slices; k++) {
+                        let theta = 2 * Math.PI * (k / slices);
+                        model.vertices.push(CG.Vector4(
+                            c[0] + r * cosPhi * Math.cos(theta),
+                            c[1] + r * sinPhi,
+                            c[2] + r * cosPhi * Math.sin(theta),
+                            1
+                        ));
+                    }
+                    // Add edges for the current stack
+                    for (let j = 0; j <= stacks; j++) {
+                        let sliceEdge = [];
+                        for (let k = 0; k <= slices; k++) {
+                            let index = j * slices + k;
+                            sliceEdge.push(index);
+                            if (j < stacks) {
+                                model.edges.push([index, (j + 1) * slices + k]);
+                            }
+                        }
+                        sliceEdge.push(j * slices); // Close the loop for the current stack
+                        model.edges.push(sliceEdge);
                     }
                 }
+
             }
 
-            model.matrix = new Matrix(4, 4);
             processed.models.push(model);
         }
 

@@ -8,14 +8,14 @@
     "models": [
         {
             "type": "cube",
-            "center": [4, 4, -10],
-            "width": 8,
-            "height": 8,
+            "center": [16, 0, -10],
+            "width": 4,
+            "height": 4,
             "depth": 8
         },
         {
             "type": "cone",
-            "center": [12, 10, -49],
+            "center": [12, 12, -10],
             "radius": 1.5,
             "height": 5,
             "sides": 12,
@@ -26,24 +26,24 @@
         },
         {
             "type": "cylinder",
-            "center": [12, 10, -49],
+            "center": [4, 8, -10],
             "radius": 1.5,
             "height": 5,
             "sides": 12,
             "animation": {
                 "axis": "y",
-                "rps": 0.5
+                "rps": 1
             }
         },
         {
             "type": "sphere",
-            "center": [12, 10, -49],
+            "center": [0, 4, -10],
             "radius": 1.5,
-            "slices": 5,
+            "slices": 25,
             "stacks": 12,
             "animation": {
                 "axis": "y",
-                "rps": 0.5
+                "rps": 1.5
             }
         }
     ]
